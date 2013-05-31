@@ -15,15 +15,16 @@
 */
 
 $API_URL_PREFIX = "https://apis.daum.net";
-$MYPEOPLE_BOT_APIKEY = "c348e774b168290611d75d390427960fbcc4d7b1";
+$MYPEOPLE_BOT_APIKEY = "6da0da670424e4d8bf24f0f79778121a38a2de10";
 $API_URL_POSTFIX = "&apikey=" .$MYPEOPLE_BOT_APIKEY; 
 
 switch($_POST['action']) {
 	case "addBuddy":
 		greetingMessageToBuddy();	//봇을 친구로 등록한 사용자의 이름을 가져와 환영 메시지를 보냅니다.
 		break;
-	case "sendFromMessage":		
-		echoMessageToBuddy();		//말을 그대로 따라합니다.
+	case "sendFromMessage":
+		sendFromMessage();
+		//echoMessageToBuddy();		//말을 그대로 따라합니다.
 		break;
 	case "createGroup":
 		groupCreatedMessage();		//그룹대화방이 생성되었을때 그룹대화를 만든사람과 대화에 참여한 친구들의 이름을 출력합니다.
@@ -35,7 +36,8 @@ switch($_POST['action']) {
 		groupExitAlertMessage();	//그룹대화방에서 친구가 나갔을 경우 정보를 출력합니다.
 		break;
 	case "sendFromGroup":		
-		filterGroupMessage();		//그룹 대화방에서 특정 메시지가 왔을때 반응합니다.
+		searchBook();
+		//filterGroupMessage();		//그룹 대화방에서 특정 메시지가 왔을때 반응합니다.
 		break;
 }
 
@@ -139,7 +141,7 @@ function sendMessage($target, $targetId, $msg)
 	$url =  $API_URL_PREFIX."/mypeople/" .$target. "/send.xml?apikey=" .$MYPEOPLE_BOT_APIKEY;
 	
 	//CR처리. \n 이 있을경우 에러남
-	$msg = str_replace(array("\n",'\n'), "\r", $msg);		
+	$msg = str_replace(array("\n",'\n'), "\r", $msg);
 	
 	//파라미터 설정
 	$postData = array();
@@ -189,5 +191,177 @@ function getBuddyName($buddyId)
 	}
 }
 
+
+function sendFromMessage(){
+	$buddyId = $_POST['buddyId'];		//메시지를 보낸 친구ID
+	$content =  $_POST['content'];			//메시지 내용
+	
+	if (strpos($content, '책찾아') !== false) {	
+		$pos = strpos($content, '책찾아');
+		$bookTitle = substr($content, 0, strlen($content) - $pos);
+		$book = searchBook($buddyId, $bookTitle);
+		
+		sendMessage("buddy", $buddyId, 
+			"<< 요 책 어떰? >>\n"
+			.$book->title.
+			"\n".$book->cover_s_url.
+			"\n".$book->description.
+			"\n link : ".$book->link);
+		
+		$content = $bookTitle;
+	}
+	else if (strpos($content, '책추천') !== false) {
+		$loop = 0;
+		$book = null;
+		while($book == null && $loop < 20){
+			$loop++;
+			$keyword_text = searchSocial();
+			if($keyword_text == null) continue;
+			$keywords = explode(' ', $keyword_text);		
+			$keyword = $keywords[rand(0, count($keywords) -1)];
+		
+			$book = searchBook($buddyId, $keyword);		
+		}
+		
+		if($book == null){
+			sendMessage("buddy", $buddyId, "추천책 못찾겠소!");
+		}else{		
+			$msg = "SocialPick 키워드 : ".$keyword."\n<< 책 추천! >>\n"
+				.$book->title.
+				"\n".$book->cover_s_url.
+				"\n".$book->description.
+				"\n(책 정보 링크 : ".$book->link.")";
+				
+			$blog = searchBlog($book->title);
+			if($blog!=null){
+				$msg .= "\n\n<<추천 blog 설명>>\n".removeHtmlEscape($blog->description).
+					"\n(블로그 원문 : ".$blog->comment.")";
+			}
+			
+			sendMessage("buddy", $buddyId, $msg);
+		}
+		
+	}
+	/*
+	else if(strpos($content, '스토킹') !== false) {
+		if (apc_exists('kwdm') !== false) {
+			sendMessage("buddy", $buddyId, "global : ".json_encode(apc_get('kwdm')));
+			$keyword_map = apc_get('kwdm');
+			if(array_key_exists($buddyId, $keyword_map)){
+				$user = $keyword_map[$buddyId];
+				sendMessage("buddy", $buddyId, json_encode($user));
+			} else {
+				sendMessage("buddy", $buddyId, "없어!");
+			}			
+		}
+	}
+	
+	extractKeywordAndSave($buddyId, $content);
+	*/
+}
+
+function searchBookForGroup() {
+	$groupId = $_POST['groupId'];	//그룹 대화방ID
+	$buddyId = $_POST['buddyId'];	//그룹 대화방에서 메시지를 보낸 친구ID
+	$content = $_POST['content'];	//메시지 내용
+
+	if (strpos($content, '책찾아') !== false)
+	{	
+		$pos = strpos($content, '책찾아');
+		$bookTitle = substr($content, 0, strlen($content) - $pos);
+		sendMessage("group", $groupId, searchBook($buddyId, $bookTitle));
+	}
+	
+	//퇴장처리
+	if (strcmp($content, '퇴장') == 0 || strcmp($content, 'exit') == 0)
+	{
+		exitGroup($groupId);	//그룹대화방 퇴장
+	}
+}
+
+function searchBook($buddyId, $title) {
+	$request = 'http://apis.daum.net/search/book?sort=popular&result=20&output=json&apikey=06a7cab23104aa54f1b14d2e2a1cd2a51fafd1af&q='.urlencode($title);
+	$response = file_get_contents($request);
+	$json_obj = json_decode($response);
+	$items = $json_obj->channel->item;
+	
+	if($items == null || count($items) < 1){
+		return null;
+	}
+	
+	$book = $items[rand(0,count($items)-1)];
+	$book->title = removeHtmlEscape($book->title);
+	$book->description = removeHtmlEscape($book->description);
+	return $book;
+}
+
+function searchSocial() {
+	$pick_types = array('c','e','s');
+	$request = 'http://apis.daum.net/socialpick/search?n=20&category='.$pick_types[rand(0,2)].'&output=json&apikey=06a7cab23104aa54f1b14d2e2a1cd2a51fafd1af';
+	$response = file_get_contents($request);
+	$json_obj = json_decode($response);
+	$items = $json_obj->socialpick->item;
+	
+	if($items == null || count($items) < 1){
+		return null;
+	}
+	
+	$item = $items[rand(0,count($items)-1)];
+	
+	return $item->keyword;
+}
+
+function searchBlog($bookTitle) {
+	$request = 'http://apis.daum.net/search/blog?sort=accu&result=20&output=json&apikey=06a7cab23104aa54f1b14d2e2a1cd2a51fafd1af&q='.urlencode($bookTitle);
+	$response = file_get_contents($request);
+	$json_obj = json_decode($response);
+	$items = $json_obj->channel->item;
+	
+	if($items == null || count($items) < 1){
+		return null;
+	}
+	
+	$item = $items[rand(0,count($items)-1)];
+	
+	return $item;
+}
+
+
+function removeHtmlEscape($txt) {
+	$result = str_replace("&lt;b&gt;","",$txt);
+	$result = str_replace("&lt;/b&gt;","",$result);
+	$result = str_replace("&quot;","'",$result);
+	return $result;
+}
+
+function extractKeywordAndSave($buddyId, $content){
+	$keyword_map = null;
+	if (apc_exists('kwdm') !== false)
+	{
+	    $keyword_map = apc_get('kwdm');
+	}
+	else
+	{
+	    apc_store('kwdm', array());
+	}
+	
+	$keywords = explode(' ', $content);
+	foreach($keywords as $keyword){
+		$user = array();
+		if(array_key_exists($buddyId, $keyword_map)){
+			$user = $keyword_map[$buddyId];
+		} else {
+			$keyword_map[$buddyId] = $user;
+		}
+
+		if(array_key_exists($keyword, $user)){
+			$user[$keyword] = $user[$keyword] + 1;	
+		} else{
+			$user[$keyword] = 1;
+		}
+	}
+	
+	sendMessage("buddy", $buddyId, searchBook($buddyId, json_encode($keyword_map)));
+}
 ?>
 
