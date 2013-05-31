@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+<meta charset='utf-8' />
+<title>OpenAPI Test</title>
+<script type="text/javascript" src="" id="openapi"></script>
+<script type="text/javascript" src="http://code.jquery.com/jquery-2.0.2.min.js"></script>
+<script type="text/javascript">
+var apikey = "06a7cab23104aa54f1b14d2e2a1cd2a51fafd1af";
+var url = 'http://apis.daum.net/search/book?apikey=' + apikey + '&callback=searchCallback&output=json&q=';
+var searchCallback = function(z) {
+	console.log(z);
+	var r = $('#r');
+	var table = $('<table>');
+	for (var i = 0; i < z.channel.item.length; i++)
+	{
+		var tr = $('<tr>');
+		var td = $('<td>');
+		var td2 = $('<td>');
+		var a = $('<a href="'+z.channel.item[i].link+'">'+htmlDecode(z.channel.item[i].title)+'</a>');
+		var p = $('<p>'+htmlDecode(z.channel.item[i].description)+'</p>');
+		
+		td.append(a);
+		td2.append(p);
+		tr.append(td);
+		tr.append(td2);
+		table.append(tr);
+	}
+	r.append(table);
+};
+
+
+function htmlDecode(input){
+  var e = document.createElement('div');
+  e.innerHTML = input;
+  return e.childNodes.length === 0 ? "" : e.childNodes[0].nodeValue;
+}
+
+$(function(){
+	console.log("init start");
+	$('#b').click(function(e){
+		$("#openapi").remove();
+		var script = $("<script>").attr("id","openapi").attr("src", url+$('#q').val());
+		
+		$("body").append(script);
+	});
+});
+</script>
+</head>
+<body>
+  <div id="divSearch"> 
+  	책 검색 예제
+    <input id="q" type="text"/>
+    <input id="b" type="button" value="검색"/>
+  </div>
+  <div id="r"></div>
+</body>
+</html>
+		
