@@ -15,7 +15,7 @@
 */
 
 $API_URL_PREFIX = "https://apis.daum.net";
-$MYPEOPLE_BOT_APIKEY = "6da0da670424e4d8bf24f0f79778121a38a2de10";
+$MYPEOPLE_BOT_APIKEY = "c348e774b168290611d75d390427960fbcc4d7b1";
 $API_URL_POSTFIX = "&apikey=" .$MYPEOPLE_BOT_APIKEY; 
 
 switch($_POST['action']) {
@@ -201,49 +201,10 @@ function sendFromMessage(){
 		$bookTitle = substr($content, 0, strlen($content) - $pos);
 		$book = searchBook($buddyId, $bookTitle);
 		
-		sendMessage("buddy", $buddyId, 
-			"<< 요 책 어떰? >>\n"
-			.$book->title.
-			"\n".$book->cover_s_url.
-			"\n".$book->description.
-			"\n link : ".$book->link);
+		sendMessage("buddy", $buddyId, "<< 요 책 어떰? >>\n".$book->title."\n".$book->cover_s_url."\n".$book->description);
 		
 		$content = $bookTitle;
-	}
-	else if (strpos($content, '책추천') !== false) {
-		$loop = 0;
-		$book = null;
-		while($book == null && $loop < 20){
-			$loop++;
-			$keyword_text = searchSocial();
-			if($keyword_text == null) continue;
-			$keywords = explode(' ', $keyword_text);		
-			$keyword = $keywords[rand(0, count($keywords) -1)];
-		
-			$book = searchBook($buddyId, $keyword);
-		}
-		
-		if($book == null){
-			sendMessage("buddy", $buddyId, "추천책 못찾겠소!");
-		}else{		
-			$msg = "SocialPick 키워드 : ".$keyword."\n<< 책 추천! >>\n"
-				.$book->title.
-				"\n".$book->cover_s_url.
-				"\n".$book->description.
-				"\n(책 정보 링크 : ".$book->link.")";
-				
-			$blog = searchBlog($book->title);
-			if($blog!=null){
-				$msg .= "\n\n<<추천 blog 설명>>\n".removeHtmlEscape($blog->description).
-					"\n(블로그 원문 : ".$blog->comment.")";
-			}
-			
-			$insertId = saveData($book->title, $msg);
-			$msg .= "\nEvernote : http://hiddenbooks.herokuapp.com/newbook?id=".$insertId;
-			sendMessage("buddy", $buddyId, $msg);
-		}
-		
-	}
+	} 
 	/*
 	else if(strpos($content, '스토킹') !== false) {
 		if (apc_exists('kwdm') !== false) {
@@ -297,42 +258,9 @@ function searchBook($buddyId, $title) {
 	return $book;
 }
 
-function searchSocial() {
-	$pick_types = array('c','e','s');
-	$request = 'http://apis.daum.net/socialpick/search?n=20&category='.$pick_types[rand(0,2)].'&output=json&apikey=06a7cab23104aa54f1b14d2e2a1cd2a51fafd1af';
-	$response = file_get_contents($request);
-	$json_obj = json_decode($response);
-	$items = $json_obj->socialpick->item;
-	
-	if($items == null || count($items) < 1){
-		return null;
-	}
-	
-	$item = $items[rand(0,count($items)-1)];
-	
-	return $item->keyword;
-}
-
-function searchBlog($bookTitle) {
-	$request = 'http://apis.daum.net/search/blog?sort=accu&result=20&output=json&apikey=06a7cab23104aa54f1b14d2e2a1cd2a51fafd1af&q='.urlencode($bookTitle);
-	$response = file_get_contents($request);
-	$json_obj = json_decode($response);
-	$items = $json_obj->channel->item;
-	
-	if($items == null || count($items) < 1){
-		return null;
-	}
-	
-	$item = $items[rand(0,count($items)-1)];
-	
-	return $item;
-}
-
-
 function removeHtmlEscape($txt) {
 	$result = str_replace("&lt;b&gt;","",$txt);
 	$result = str_replace("&lt;/b&gt;","",$result);
-	$result = str_replace("&quot;","'",$result);
 	return $result;
 }
 
@@ -364,21 +292,6 @@ function extractKeywordAndSave($buddyId, $content){
 	}
 	
 	sendMessage("buddy", $buddyId, searchBook($buddyId, json_encode($keyword_map)));
-}
-
-function saveData($title, $body){
-	$conn = mysql_connect("localhost", "root", "newpassword");
-	if(!$conn){
-		return;
-	}
-	
-	mysql_query("use hiddenbooks");	
-	mysql_query("insert into book_log (title, json) values ('$title', '$body')");
-	$id = mysql_insert_id();
-	mysql_close($conn);
-	
-	
-	return $id;
 }
 ?>
 
