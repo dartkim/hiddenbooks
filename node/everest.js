@@ -56,6 +56,15 @@ app.get('/', function(req, res){
 	return res.redirect('/website/index.html');
 });
 
+// New Auth Page
+app.get('/auth', function(req, res){
+	
+	if(!req.session.user) //Unauthenticate User
+		return res.redirect('/website/auth.html');
+		
+	return res.redirect('/website/mybook.html');
+});
+
 //===================================================
 //								Authentications
 //===================================================
@@ -144,7 +153,7 @@ app.get('/notes', function(req, res){
 			if(err == 'EDAMUserException') return res.send(err,403);
       return res.send(err,500);
     } else {
-			return res.send(noteList,200);
+		return res.send(noteList,200);
     }
   });
 });
@@ -156,9 +165,8 @@ app.post('/notes', function(req, res){
 
 	var note = req.body;
 	var userInfo = req.session.user;
-	
+	console.log(note);			
 	evernote.createNote(userInfo, note, function(err, note) {
-		
 		if (err) {
 			if(err == 'EDAMUserException') return res.send(err,403);
       return res.send(err,500);
@@ -166,6 +174,65 @@ app.post('/notes', function(req, res){
 
 		return res.send(note,200);
   });
+});
+
+app.get('/newbook', function(req, res){
+
+	if(!req.session.user) //Unauthenticate User
+		return res.redirect('/website/auth.html');
+		
+	//if(!req.body) return res.send('Invalid content',400);
+	var userInfo = req.session.user;
+	/*
+	var http = require('http');
+	var url = "http://211.43.193.120/hiddenbooks/bot/php/book.php?id=";
+	var client = http.createClient(80, '211.43.193.120');
+	var request = client.request('GET', '/hiddenbooks/bot/php/book.php?id=1');
+	request.write("");
+	request.end();
+	request.on("response", function (response) {
+	    console.log(response);
+	});
+	*/
+	var http = require('http');
+
+	//The url we want is `www.nodejitsu.com:1337/`
+	var options = {
+	  host: '211.43.193.120',
+	  path: '/hiddenbooks/bot/php/book.php?id='+req.query.id,
+	  //since we are listening on a custom port, we need to specify it by hand
+	  port: '80',
+	  //This is what changes the request to a POST request
+	  method: 'GET'
+	};
+	
+	callback = function(response) {
+	  var str = ''
+	  response.on('data', function (chunk) {
+	    str += chunk;
+	  });
+	
+	  response.on('end', function () {
+	  	var note = { title:"---" , content:"<!DOCTYPE en-note SYSTEM \"http://xml.evernote.com/pub/enml2.dtd\"> <en-note style=\"word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;\"><div>"+escape(str)+"</div> </en-note>"};  	
+	  	console.log(note);
+	  	evernote.createNote(userInfo, note, function(err, note) {
+			if (err) {
+				if(err == 'EDAMUserException') return res.send(err,403);
+				return res.send(err,500);
+			} 
+    
+			return res.send(note,200);
+		});
+	  });
+	}
+	
+	var req = http.request(options, callback);
+	//This is the data we are posting, it needs to be a string or a buffer
+	//req.write("hello world!");
+	req.end();
+
+	return res.redirect('/website/index.html');
+	
 });
 
 app.get('/notes/:guid', function(req, res){
@@ -461,4 +528,4 @@ app.get('/sync-chunk', function(req, res){
   });
 });
 
-app.listen(config.serverPort);
+app.listen(process.env.PORT || config.serverPort);

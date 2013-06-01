@@ -51,8 +51,17 @@ $(function() {
 		  
 		  $('.findnotes-example ul').html('');
 		  for(var i in noteList.notes){
-		    var note = noteList.notes[i]
-		    $('.findnotes-example ul').append('<li>'+note.title+'</li>')
+		    var note = noteList.notes[i];
+		    $('.findnotes-example ul').append('<li><pre id="'+note.guid+'"></pre><li>')
+		    $.getJSON('/notes/'+note.guid, function (json) {
+			    if(json) {
+			    	var content = json.content;
+			    	var stIdx = content.indexOf("<div>");
+			    	var edIdx = content.indexOf("</div>");
+				    $('#'+json.guid).text(unescape(content.substring(stIdx+5,edIdx)));
+			    }
+			  });
+ 
 		  }
 		})
 	}
